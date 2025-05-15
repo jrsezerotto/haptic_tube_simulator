@@ -103,14 +103,6 @@ int __SDK dhdOpen () {
    return 0;
 };
 
-bool __SDK dhdHasWrist (char ID) {
-   return false;
-};
-
-bool __SDK dhdHasGripper (char ID) {
-   return false;
-};
-
 const char* __SDK dhdGetSDKVersionStr() {
    return "3.17.6";
 };

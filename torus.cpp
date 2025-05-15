@@ -1,25 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//  Copyright (C) 2001-2023 Force Dimension, Switzerland.
-//  All Rights Reserved.
-//
-//  Force Dimension SDK 3.17.6
-//
-////////////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This example illustrates how to compute the interaction between several
-/// Force Dimension haptic devices and a torus that spins freely around its
-/// center when forces are applied to it.
-///
-/// A single thread is used to compute the interaction force and torque on all
-/// available haptic devices, as well as to compute the dynamics of the torus.
-/// Holding any of the haptic devices end-effector user button stops the torus
-/// from spinning and holds it in place.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 // C++ library headers
 #define _USE_MATH_DEFINES
 #include <algorithm>
@@ -29,17 +7,11 @@
 #include <vector>
 
 // Platform specific headers
-#if defined(WIN32) || defined(WIN64)
 #define NOMINMAX
 #include "windows.h"
-#endif
 
 // GLU library headers
-#ifdef MACOSX
-#include "OpenGL/glu.h"
-#else
 #include "GL/glu.h"
-#endif
 
 // Force Dimension SDK library header
 #include "dhdc.h"
@@ -51,18 +23,12 @@
 #include "CMatrixGL.h"
 #include "FontGL.h"
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// Haptic device data structure
-///
-////////////////////////////////////////////////////////////////////////////////
-
 class Utils {
     public:
     inline static Eigen::Vector3d forceOnTool[2] = {Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()};
 
     static void drawForceOnTool() {
-        Eigen::Vector3d fixedVector(0.03, 0.0, 0.0);  // Example vector
+        Eigen::Vector3d fixedVector(0.03, 0.0, 0.0);
         Eigen::Vector3d start(0.0, 0.0, 0.0);
         Eigen::Vector3d end = Utils::forceOnTool[0]/1000;
         glDisable(GL_LIGHTING);
@@ -88,63 +54,34 @@ class Utils {
         // Draw the cone (radius = 0.003, height = 0.005)
         gluCylinder(quad, 0.001, 0.0, 0.003, 16, 1);
 
+        // Do cleanup operations for OpenGL
         glPopMatrix();
         gluDeleteQuadric(quad);
-
-
         glEnable(GL_LIGHTING);
     };
 };
 
 struct HapticDevice
 {
-    /// Haptic device handle
     int deviceId;
-
-    /// Number of tools provided by this haptic device
-    int numTools;
-
-    /// Positions of the haptic device tool(s)
-    Eigen::Vector3d toolPosition[2];
-
-    /// Haptic device rotation
+    Eigen::Vector3d toolPosition;
     Eigen::Matrix3d rotation;
 
-    /// \b true if the haptic device has a wrist
-    bool useRotation;
-
-    /// \b true if the haptic device has a gripper
-    bool useGripper;
-
-    /// Constructor
     HapticDevice()
-    : deviceId { -1 },
-      numTools {},
-      useRotation { false },
-      useGripper{ false }
+    : deviceId { -1 }
     {}
 };
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// Constants
-///
-////////////////////////////////////////////////////////////////////////////////
-
-/// Torus stiffness in [N/m]
+// Constants
 constexpr double Stiffness = 1000.0;
-
-/// Torus apparent mass in arbitrary unit
 constexpr double Mass = 1000.0;
-
-/// Torus angular damping in [Nm/(rad/s)]
 constexpr double Kv = 1.0;
 
 /// Torus outer radius in [m]
-constexpr float TorusRadius0 = 0.05f;
+constexpr float TorusOuterRadius = 0.05f;
 
 /// Torus inner radius in [m]
-constexpr float TorusRadius1 = 0.027f;
+constexpr float TorusInnerRadius = 0.027f;
 
 /// Haptic tool sphere radius in [m]
 constexpr double ToolRadius = 0.005;
@@ -269,7 +206,7 @@ int updateGraphics()
     cMatrixGL matrix;
     matrix.set(torusPosition, torusRotation);
     matrix.glMatrixPushMultiply();
-    DrawTorus(TorusRadius0, TorusRadius1, 64, 64);
+    DrawTorus(TorusOuterRadius, TorusInnerRadius, 64, 64);
     matrix.glMatrixPop();
 
     // Configure OpenGL for tool rendering.
@@ -282,40 +219,16 @@ int updateGraphics()
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1.0);
 
     // Render all tools for all devices.
-    size_t devicesCount = devicesList.size();
-    for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
-    {
-        // Render all tools for the current device.
-        HapticDevice& currentDevice = devicesList[deviceIndex];
-        for (int toolIndex = 0; toolIndex < currentDevice.numTools; toolIndex++)
-        {
-            matrix.set(currentDevice.toolPosition[toolIndex], currentDevice.rotation);
-            matrix.glMatrixPushMultiply();
-            GLUquadricObj* sphere = gluNewQuadric();
-            gluSphere(sphere, ToolRadius, 32, 32);
+    HapticDevice& currentDevice = devicesList[0];
+    matrix.set(currentDevice.toolPosition, currentDevice.rotation);
+    matrix.glMatrixPushMultiply();
+    GLUquadricObj* sphere = gluNewQuadric();
+    gluSphere(sphere, ToolRadius, 32, 32);
 
-            // Drawing force acting over the tool
-            Utils::drawForceOnTool();
+    // Drawing force acting over the tool
+    Utils::drawForceOnTool();
 
-            // Render a small frame if the haptic device supports rotations.
-            if (currentDevice.useRotation)
-            {
-                glDisable(GL_LIGHTING);
-                glBegin(GL_LINES);
-                glColor3f(0.45f, 0.45f, 0.45f);
-                glVertex3d(0.00,  0.000,  0.000);
-                glVertex3d(0.02,  0.000,  0.000);
-                glVertex3d(0.02, -0.004,  0.000);
-                glVertex3d(0.02,  0.004,  0.000);
-                glVertex3d(0.02,  0.000, -0.004);
-                glVertex3d(0.02,  0.000,  0.004);
-                glEnd();
-                glEnable(GL_LIGHTING);
-            }
-
-            matrix.glMatrixPop();
-        }
-    }
+    matrix.glMatrixPop();
 
     // Render text overlay.
     if (showRefreshRate)
@@ -374,7 +287,7 @@ void* hapticsLoop(void* a_userData)
     double py = 0.0;
     double pz = 0.0;
     double rot[3][3] = {};
-    Eigen::Vector3d toolPosition[2];
+    Eigen::Vector3d toolPosition;
     Eigen::Vector3d toolLocalPosition;
     Eigen::Vector3d forceLocal;
     Eigen::Vector3d force;
@@ -386,10 +299,7 @@ void* hapticsLoop(void* a_userData)
 
     // Enable force on all devices.
     size_t devicesCount = devicesList.size();
-    for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
-    {
-        dhdEnableForce(DHD_ON, devicesList[deviceIndex].deviceId);
-    }
+    dhdEnableForce(DHD_ON, devicesList[0].deviceId);
 
     // Run the haptic loop.
     while (simulationRunning)
@@ -400,162 +310,94 @@ void* hapticsLoop(void* a_userData)
         timePrevious = time;
 
         // Process each device in turn.
-        for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
+        // Shortcut to the current device.
+        HapticDevice& currentDevice = devicesList[0];
+
+        // Select the active device to receive all subsequent DHD commands.
+        dhdSetDevice(currentDevice.deviceId);
+
+        // Retrieve the device orientation frame (identity for 3-dof devices).
+        if (dhdGetOrientationFrame(rot) < 0)
         {
-            // Shortcut to the current device.
-            HapticDevice& currentDevice = devicesList[deviceIndex];
-
-            // Select the active device to receive all subsequent DHD commands.
-            dhdSetDevice(currentDevice.deviceId);
-
-            // Retrieve the device orientation frame (identity for 3-dof devices).
-            if (dhdGetOrientationFrame(rot) < 0)
-            {
-                std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
-                break;
-            }
-            currentDevice.rotation << rot[0][0], rot[0][1], rot[0][2],
-                                      rot[1][0], rot[1][1], rot[1][2],
-                                      rot[2][0], rot[2][1], rot[2][2];
-
-            // Retrieve the position of all tools attached to devices.
-            // Devices equipped with grippers provide 2 tools, while others only provide 1.
-            if (currentDevice.useGripper)
-            {
-                if (dhdGetGripperThumbPos(&px, &py, &pz) < 0)
-                {
-                    std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
-                    break;
-                }
-                toolPosition[0] << px, py, pz;
-
-                if (dhdGetGripperFingerPos(&px, &py, &pz) < 0)
-                {
-                    std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
-                    break;
-                }
-                toolPosition[1] << px, py, pz;
-            }
-            else
-            {
-                if (dhdGetPosition(&px, &py, &pz) < 0)
-                {
-                    std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
-                    break;
-                }
-                toolPosition[0] << px, py, pz;
-            }
-
-            // Compute the interaction between the torus and each tool.
-            for (int toolIndex = 0; toolIndex < currentDevice.numTools; toolIndex++)
-            {
-                // Compute the position of the tool in the local coordinates of the torus.
-                toolLocalPosition = torusRotation.transpose() * (toolPosition[toolIndex] - torusPosition);
-
-                // Project the tool position onto the torus plane (z = 0).
-                Eigen::Vector3d toolProjection = toolLocalPosition;
-                toolProjection(2) = 0.0;
-
-                // Search for the nearest point on the torus medial axis.
-                forceLocal.setZero();
-                if (toolLocalPosition.squaredNorm() > 1e-10)
-                {
-                    Eigen::Vector3d pointAxisTorus = TorusRadius0 * toolProjection.normalized();
-
-                    // Compute eventual penetration of the tool inside the torus.
-                    Eigen::Vector3d torusToolDirection = toolLocalPosition - pointAxisTorus;
-
-                    // If the tool is inside the torus, compute the force which is proportional to the tool penetration.
-                    double distance = torusToolDirection.norm();
-                    if ((distance < (TorusRadius1 + ToolRadius)) && (distance > 0.001))
-                    {
-                        forceLocal = ((TorusRadius1 + ToolRadius) - distance) * Stiffness * torusToolDirection.normalized();
-                        toolLocalPosition = pointAxisTorus + (TorusRadius1 + ToolRadius) * torusToolDirection.normalized();
-                    }
-
-                    // Otherwise, the tool is outside the torus and we have a null force.
-                    else
-                    {
-                        forceLocal.setZero();
-                    }
-                }
-
-                // TODO(now): retrieve reactionForce as the negative of forceTool
-                // Convert the tool reaction force and position to world coordinates.
-                forceTool[toolIndex] = torusRotation * forceLocal;
-                currentDevice.toolPosition[toolIndex] = torusRotation * toolLocalPosition;
-
-                Utils::forceOnTool[toolIndex] = forceTool[toolIndex];
-
-                // Update the torus angular velocity.
-                torusAngularVelocity += -1.0 / Mass * timeStep * (currentDevice.toolPosition[toolIndex] - torusPosition).cross(forceTool[toolIndex]);
-            }
-
-            // Compute the force to render on the haptic device.
-            Eigen::Vector3d force;
-            double gripperForceMagnitude = 0.0;
-
-            // If the haptic device does not have a gripper, use the current tool force.
-            if (!currentDevice.useGripper)
-            {
-                force = forceTool[0];
-            }
-
-            // If the haptic device has a gripper, compute the projected force on each gripper tool.
-            else
-            {
-                // Compute the total force.
-                force = forceTool[0] + forceTool[1];
-                Eigen::Vector3d gripperDirection = toolPosition[1] - toolPosition[0];
-
-                // If the total force is not null, project it on both gripper tools.
-                if (gripperDirection.norm() > 0.00001)
-                {
-                    // Project the mobile gripper tool force (forceTool[1]) onto the gripper opening vector (gripperDirection).
-                    gripperDirection.normalize ();
-                    Eigen::Vector3d gripperForce = (forceTool[1].dot(gripperDirection) / (gripperDirection.squaredNorm())) * gripperDirection;
-                    gripperForceMagnitude = gripperForce.norm();
-
-                    // Compute the direction of the force based on the angle between the gripper
-                    // force vector (gripperForce) and the gripper opening vector (gripperDirection)
-                    if (force.norm() > 0.001)
-                    {
-                        double cosAngle = gripperDirection.dot(gripperForce) / (gripperDirection.norm() * gripperForce.norm());
-                        cosAngle = std::min(1.0, cosAngle);
-                        cosAngle = std::max(-1.0, cosAngle);
-                        double angle = acos(cosAngle);
-                        if ((angle > M_PI / 2.0) || (angle < -M_PI / 2.0))
-                        {
-                            gripperForceMagnitude = -gripperForceMagnitude;
-                        }
-                    }
-                }
-
-                // Invert the gripper force direction for left-handed devices.
-                if (dhdIsLeftHanded())
-                {
-                    gripperForceMagnitude = -gripperForceMagnitude;
-                }
-            }
-
-            // Only enable haptic rendering once the device is in free space.
-            static bool safeToRenderHaptics = false;
-            if (!safeToRenderHaptics)
-            {
-                if (force.norm() == 0.0 && gripperForceMagnitude == 0.0)
-                {
-                    safeToRenderHaptics = true;
-                }
-                else
-                {
-                    force.setZero();
-                    gripperForceMagnitude = 0.0;
-                }
-            }
-
-            // Apply all forces at once.
-            dhdSetForceAndGripperForce(force(0), force(1), force(2), gripperForceMagnitude);
+            std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
+            break;
         }
+        currentDevice.rotation << rot[0][0], rot[0][1], rot[0][2],
+                                    rot[1][0], rot[1][1], rot[1][2],
+                                    rot[2][0], rot[2][1], rot[2][2];
+
+        // Retrieve the position of all tools attached to devices.
+        // Devices equipped with grippers provide 2 tools, while others only provide 1.
+        if (dhdGetPosition(&px, &py, &pz) < 0)
+        {
+            std::cout << std::endl << "error: failed to read rotation (" << dhdErrorGetLastStr() << ")" << std::endl;
+            break;
+        }
+        toolPosition << px, py, pz;
+
+        // Compute the position of the tool in the local coordinates of the torus.
+        toolLocalPosition = torusRotation.transpose() * (toolPosition - torusPosition);
+
+        // Project the tool position onto the torus plane (z = 0).
+        Eigen::Vector3d toolProjection = toolLocalPosition;
+        toolProjection(2) = 0.0;
+
+        // Search for the nearest point on the torus medial axis.
+        forceLocal.setZero();
+        if (toolLocalPosition.squaredNorm() > 1e-10)
+        {
+            Eigen::Vector3d pointAxisTorus = TorusOuterRadius * toolProjection.normalized();
+
+            // Compute eventual penetration of the tool inside the torus.
+            Eigen::Vector3d torusToolDirection = toolLocalPosition - pointAxisTorus;
+
+            // If the tool is inside the torus, compute the force which is proportional to the tool penetration.
+            double distance = torusToolDirection.norm();
+            if ((distance < (TorusInnerRadius + ToolRadius)) && (distance > 0.001))
+            {
+                forceLocal = ((TorusInnerRadius + ToolRadius) - distance) * Stiffness * torusToolDirection.normalized();
+                toolLocalPosition = pointAxisTorus + (TorusInnerRadius + ToolRadius) * torusToolDirection.normalized();
+            }
+
+            // Otherwise, the tool is outside the torus and we have a null force.
+            else
+            {
+                forceLocal.setZero();
+            }
+        }
+
+        // TODO(now): retrieve reactionForce as the negative of forceTool
+        // Convert the tool reaction force and position to world coordinates.
+        forceTool[0] = torusRotation * forceLocal;
+        currentDevice.toolPosition = torusRotation * toolLocalPosition;
+
+        Utils::forceOnTool[0] = forceTool[0];
+
+        // Update the torus angular velocity.
+        torusAngularVelocity += -1.0 / Mass * timeStep * (currentDevice.toolPosition - torusPosition).cross(forceTool[0]);
+
+        // Compute the force to render on the haptic device.
+        Eigen::Vector3d force;
+        double gripperForceMagnitude = 0.0;
+        force = forceTool[0];
+
+        // Only enable haptic rendering once the device is in free space.
+        static bool safeToRenderHaptics = false;
+        if (!safeToRenderHaptics)
+        {
+            if (force.norm() == 0.0 && gripperForceMagnitude == 0.0)
+            {
+                safeToRenderHaptics = true;
+            }
+            else
+            {
+                force.setZero();
+                gripperForceMagnitude = 0.0;
+            }
+        }
+
+        // Apply all forces at once.
+        dhdSetForceAndGripperForce(force(0), force(1), force(2), gripperForceMagnitude);
 
         // Stop the torus rotation if any of the devices button is pressed.
         for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
@@ -675,28 +517,11 @@ void onKeyPressed(GLFWwindow* a_window,
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when the GLFW library reports an error.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 void onError(int a_error,
              const char* a_description)
 {
     std::cout << "error: " << a_description << std::endl;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the GLFW window.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
 
 int initializeGLFW()
 {
@@ -723,13 +548,6 @@ int initializeGLFW()
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_STEREO, GL_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-
-    // Apply platform-specific settings.
-#ifdef MACOSX
-
-    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GL_FALSE);
-
-#endif
 
     // Create the GLFW window and OpenGL display context.
     window = glfwCreateWindow(windowWidth, windowHeight, "Force Dimension - OpenGL Torus Example", nullptr, nullptr);
@@ -786,82 +604,28 @@ int initializeGLFW()
     return 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the haptic device.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 int initializeHaptics()
 {
-    int devicesCount = dhdGetAvailableCount();
-    if (devicesCount < 1)
+    int deviceId = dhdOpenID(0);
+    if (deviceId >= 0)
     {
-        std::cout << "error: no device found" << std::endl;
-        return -1;
+        devicesList.push_back(HapticDevice {});
+        HapticDevice& currentDevice = devicesList.back();
+        currentDevice.deviceId = deviceId;
+        std::cout << dhdGetSystemName() << " device detected" << std::endl;
     }
-
-    // Open a connection to each available haptic device and store its properties.
-    for (int deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
-    {
-        int deviceId = dhdOpenID(deviceIndex);
-        if (deviceId >= 0)
-        {
-            devicesList.push_back(HapticDevice {});
-            HapticDevice& currentDevice = devicesList.back();
-            currentDevice.deviceId = deviceId;
-            currentDevice.useRotation = dhdHasWrist(deviceId);
-            currentDevice.useGripper = dhdHasGripper(deviceId);
-            currentDevice.numTools = (currentDevice.useGripper) ? 2 : 1;
-
-            // Enable button emulation on devices with an active gripper.
-            if (dhdHasActiveGripper() && dhdEmulateButton(DHD_ON) < 0)
-            {
-                std::cout << "error: failed to enable button emulation (" << dhdErrorGetLastStr() << ")" << std::endl;
-                return -1;
-            }
-
-            // Display the device type.
-            std::cout << dhdGetSystemName() << " device detected" << std::endl;
-        }
-    }
-
     return 0;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the simulation.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
 
 int initializeSimulation()
 {
-    // Initialize all tool positions.
     size_t devicesCount = devicesList.size();
-    for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
-    {
-        for (int toolIndex = 0; toolIndex < devicesList[deviceIndex].numTools; toolIndex++)
-        {
-            devicesList[deviceIndex].toolPosition[toolIndex].setZero();
-        }
-    }
-
-    // Initialize the torus position.
+    devicesList[0].toolPosition.setZero();
     torusPosition.setZero();
     torusRotation.Identity();
     torusRotation = Eigen::AngleAxisd(M_PI * 45.0 / 180.0, Eigen::Vector3d(0.0, 1.0, -1.0));
-
     return 0;
 }
-
-////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc,
          char* argv[])
@@ -893,22 +657,10 @@ int main(int argc,
     }
 
     // Create a high priority haptic thread.
-#if defined(WIN32) || defined(WIN64)
 
     DWORD threadHandle;
     CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)(hapticsLoop), nullptr, 0x0000, &threadHandle);
     SetThreadPriority(&threadHandle, THREAD_PRIORITY_ABOVE_NORMAL);
-
-#else
-
-    pthread_t threadHandle;
-    pthread_create(&threadHandle, nullptr, hapticsLoop, nullptr);
-    struct sched_param schedulerParameters;
-    memset(&schedulerParameters, 0, sizeof(struct sched_param));
-    schedulerParameters.sched_priority = 10;
-    pthread_setschedparam(threadHandle, SCHED_RR, &schedulerParameters);
-
-#endif
 
     // Register a callback that stops the haptic thread when the application exits.
     atexit(onExit);
