@@ -1,8 +1,7 @@
 #include <chrono>
 #include <GLFW/glfw3.h>
 #include <iostream>
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
+#include <windows.h>
 
 #include "dhdc.h"
 
@@ -52,67 +51,36 @@ int __SDK dhdGetGripperFingerPos (double *px, double *py, double *pz,  char ID) 
 };
 
 int __SDK dhdGetPosition(double *px, double *py, double *pz, char ID) {
-   if (!px || !py || !pz) return DHD_ERROR_INVALID;
+    if (!px || !py || !pz) return DHD_ERROR_INVALID;
 
-   // Use a static variable to persist the x-position across calls.
-   static double keyboardZ = 0.0;
+    static double keyboardZ = 0.0;
 
-   // Open the X display once for this call.
-   Display* display = XOpenDisplay(nullptr);
-   if (!display) {
-       std::cerr << "Cannot open X display.\n";
-       *px = *py = *pz = 0.0;
-       return DHD_ERROR;
-   }
+    // --- Atualiza posição Z com base nas teclas W/S ---
+    SHORT wState = GetAsyncKeyState('W');
+    SHORT sState = GetAsyncKeyState('S');
+    double displacementIncrement = 0.000003;
 
-   // --- Update currentPx using keyboard state ---
-   auto getKeyboardPosition = [display]() -> double {
-      double keyboardPosition = 0.0; // Initialize to zero
+    if (wState & 0x8000) keyboardZ += displacementIncrement;
+    if (sState & 0x8000) keyboardZ -= displacementIncrement;
 
-      // --- Check current key state using XQueryKeymap ---
-      char keys[32];
-      XQueryKeymap(display, keys);
-      KeyCode wKey = XKeysymToKeycode(display, XK_w);
-      KeyCode sKey = XKeysymToKeycode(display, XK_s);
+    // --- Obtém posição do mouse ---
+    POINT cursorPos;
+    if (!GetCursorPos(&cursorPos)) {
+        std::cerr << "Cannot get cursor position.\n";
+        *px = *py = *pz = 0.0;
+        return DHD_ERROR;
+    }
 
-      // Check if the bit corresponding to XK_w is set.
-      double displacementIncrement = 0.00006;
-      if (keys[wKey / 8] & (1 << (wKey % 8))) {
-         keyboardPosition += displacementIncrement;  // Increase when W is pressed.
-      }
-      // Check if the bit corresponding to XK_s is set.
-      if (keys[sKey / 8] & (1 << (sKey % 8))) {
-         keyboardPosition -= displacementIncrement;  // Decrease when S is pressed.
-      }
+    double mouseX = -static_cast<double>(cursorPos.y);
+    double mouseY = static_cast<double>(cursorPos.x);
+    mouseX = 2.9 * (mouseX / 10000.0 + 0.053);
+    mouseY = 2.9 * (mouseY / 10000.0 - 0.095);
 
-      return keyboardPosition;
-   };
+    *px = keyboardZ;
+    *py = mouseY;
+    *pz = mouseX;
 
-   // --- Retrieve mouse position using a lambda ---
-   auto getMousePosition = [&]() -> std::pair<double, double> {
-       Window root = DefaultRootWindow(display);
-       Window returnedRoot, returnedChild;
-       int rootX, rootY, winX, winY;
-       unsigned int mask;
-       XQueryPointer(display, root, &returnedRoot, &returnedChild,
-                     &rootX, &rootY, &winX, &winY, &mask);
-       // Transform coordinates as per your original calculations.
-       double mouseX = -static_cast<double>(rootY);
-       double mouseY = static_cast<double>(rootX);
-       mouseX = 2.9 * (mouseX / 10000.0 + 0.0825);
-       mouseY = 2.9 * (mouseY / 10000.0 - 0.1285);
-       return {mouseX, mouseY};
-   };
-
-   auto [mouseX, mouseY] = getMousePosition();
-   keyboardZ += getKeyboardPosition();
-
-   *px = keyboardZ;
-   *py = mouseY;
-   *pz = mouseX;
-
-   XCloseDisplay(display);
-   return DHD_NO_ERROR;
+    return DHD_NO_ERROR;
 }
 
 bool __SDK dhdIsLeftHanded (char ID) {

@@ -1,2 +1,3 @@
-sdk-*
+sdk
+vcpkg/
 build
