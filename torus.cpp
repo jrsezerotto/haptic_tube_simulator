@@ -91,6 +91,8 @@ std::vector<HapticDevice> devicesList;
 Eigen::Vector3d torusPosition;
 Eigen::Matrix3d torusRotation;
 
+namespace HapticsMetods{
+
 int initializeHaptics()
 {
     int deviceId = dhdOpenID(0);
@@ -272,6 +274,7 @@ void onExit()
     std::cout << "connection closed" << std::endl;
     return;
 }
+} // namespace HapticsMetods
 
 void DrawTorus(float a_outerRadius,
                float a_innerRadius,
@@ -510,7 +513,7 @@ int main(int argc,
     std::cout << "All Rights Reserved." << std::endl << std::endl;
 
     // Find and open a connection to a haptic device.
-    if (initializeHaptics() < 0)
+    if (HapticsMetods::initializeHaptics() < 0)
     {
         std::cout << "error: failed to initialize haptics" << std::endl;
         return -1;
@@ -532,11 +535,11 @@ int main(int argc,
 
     // Create a high priority haptic thread.
     DWORD threadHandle;
-    CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)(hapticsLoop), nullptr, 0x0000, &threadHandle);
+    CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)(HapticsMetods::hapticsLoop), nullptr, 0x0000, &threadHandle);
     SetThreadPriority(&threadHandle, THREAD_PRIORITY_ABOVE_NORMAL);
 
     // Register a callback that stops the haptic thread when the application exits.
-    atexit(onExit);
+    atexit(HapticsMetods::onExit);
 
     // Display user instructions.
     std::cout << std::endl;
