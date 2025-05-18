@@ -1,3 +1,4 @@
-sdk
+sdk/
 vcpkg/
-build
+build/
+build_renderer/
