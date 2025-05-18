@@ -134,7 +134,3 @@ int __SDK dhdOpenID (char ID) {
 int __SDK dhdEmulateButton (uchar val, char ID) {
    return DHD_NO_ERROR;
 };
-
-bool __SDK dhdHasActiveGripper (char ID) {
-   return false;
-};

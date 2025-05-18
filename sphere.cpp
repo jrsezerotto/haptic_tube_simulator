@@ -8,17 +8,11 @@
 #include <iostream>
 
 // Platform specific headers
-#if defined(WIN32) || defined(WIN64)
 #define NOMINMAX
 #include "windows.h"
-#endif
 
 // GLU library headers
-#ifdef MACOSX
-#include "OpenGL/glu.h"
-#else
 #include "GL/glu.h"
-#endif
 
 // Force Dimension SDK library header
 #include "dhdc.h"
@@ -41,11 +35,8 @@ constexpr int SwapInterval = 1;
 bool simulationRunning = true;
 bool simulationFinished = false;
 int toolCount = 0;
-Eigen::Vector3d toolPosition[2];
-Eigen::Vector3d forceTool[2];
-bool useRotation = false;
-bool useGripper = false;
-bool showRefreshRate = true;
+Eigen::Vector3d toolPosition;
+Eigen::Vector3d forceTool;
 GLFWwindow* window = nullptr;
 int windowWidth = 0;
 int windowHeight = 0;
@@ -96,30 +87,13 @@ int updateGraphics() {
     gluSphere(sphere, SphereRadius, 32, 32);
     matrix.glMatrixPop();
 
-    for (int index = 0; index < toolCount; index++) {
-        matrix.set(toolPosition[index], deviceRotation);
-        matrix.glMatrixPushMultiply();
-        sphere = gluNewQuadric();
-        glColor3f(0.8f, 0.8f, 0.8f);
-        gluSphere(sphere, ToolRadius, 32, 32);
-        drawForceVector(forceTool[index]);
-        matrix.glMatrixPop();
-    }
-
-    if (showRefreshRate) {
-        static double lastTime = dhdGetTime();
-        static char rateStr[16] = "0.000 kHz";
-        double now = dhdGetTime();
-        if (now - lastTime > 0.1) {
-            snprintf(rateStr, 16, "%0.3f kHz", dhdGetComFreq());
-            lastTime = now;
-        }
-        glDisable(GL_LIGHTING);
-        glColor3f(1.0, 1.0, 1.0);
-        glRasterPos3f(0.0f, -0.01f, -0.1f);
-        for (char* c = rateStr; *c != '\0'; c++) render_character(*c, HELVETICA12);
-        glEnable(GL_LIGHTING);
-    }
+    matrix.set(toolPosition, deviceRotation);
+    matrix.glMatrixPushMultiply();
+    sphere = gluNewQuadric();
+    glColor3f(0.8f, 0.8f, 0.8f);
+    gluSphere(sphere, ToolRadius, 32, 32);
+    drawForceVector(forceTool);
+    matrix.glMatrixPop();
 
     GLenum err = glGetError();
     return (err != GL_NO_ERROR) ? -1 : 0;
@@ -130,14 +104,14 @@ void* hapticsLoop(void*) {
     while (simulationRunning) {
         double px, py, pz;
         dhdGetPosition(&px, &py, &pz);
-        toolPosition[0] << px, py, pz;
+        toolPosition << px, py, pz;
 
-        Eigen::Vector3d dir = (toolPosition[0] - SpherePosition).normalized();
-        double pen = (toolPosition[0] - SpherePosition).norm() - SphereRadius - ToolRadius;
-        if (pen < 0.0) forceTool[0] = -pen * LinearStiffness * dir;
-        else forceTool[0].setZero();
+        Eigen::Vector3d dir = (toolPosition - SpherePosition).normalized();
+        double pen = (toolPosition - SpherePosition).norm() - SphereRadius - ToolRadius;
+        if (pen < 0.0) forceTool = -pen * LinearStiffness * dir;
+        else forceTool.setZero();
 
-        Eigen::Vector3d f = forceTool[0];
+        Eigen::Vector3d f = forceTool;
         static bool safe = false;
         if (!safe) {
             if (f.norm() == 0.0) safe = true;
@@ -170,14 +144,6 @@ void onExit()
     return;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when the GLFW window is resized.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 void onWindowResized(GLFWwindow* a_window,
                      int a_width,
                      int a_height)
@@ -197,14 +163,6 @@ void onWindowResized(GLFWwindow* a_window,
     glLoadIdentity();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when a key is pressed in the GLFW window.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 void onKeyPressed(GLFWwindow* a_window,
                   int a_key,
                   int a_scanCode,
@@ -222,36 +180,13 @@ void onKeyPressed(GLFWwindow* a_window,
     {
         exit(0);
     }
-
-    // Toggle the display of the refresh rate.
-    if (a_key == GLFW_KEY_R)
-    {
-        showRefreshRate = !showRefreshRate;
-    }
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when the GLFW library reports an error.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
 
 void onError(int a_error,
              const char* a_description)
 {
     std::cout << "error: " << a_description << std::endl;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the GLFW window.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
 
 int initializeGLFW()
 {
@@ -278,13 +213,6 @@ int initializeGLFW()
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_STEREO, GL_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-
-    // Apply platform-specific settings.
-#ifdef MACOSX
-
-    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GL_FALSE);
-
-#endif
 
     // Create the GLFW window and OpenGL display context.
     window = glfwCreateWindow(windowWidth, windowHeight, "Force Dimension - OpenGL Sphere Example", nullptr, nullptr);
@@ -341,15 +269,6 @@ int initializeGLFW()
     return 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the haptic device.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 int initializeHaptics()
 {
     // Open the first available haptic device.
@@ -359,34 +278,17 @@ int initializeHaptics()
     }
 
     // Store the haptic device properties.
-    useRotation = dhdHasWrist();
-    useGripper = dhdHasGripper();
-    toolCount = (useGripper) ? 2 : 1;
+    toolCount = 1;
 
     return 0;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function initializes the simulation.
-///
-/// \return
-/// 0 on success, -1 on failure.
-///
-////////////////////////////////////////////////////////////////////////////////
 
 int initializeSimulation()
 {
     // Initialize all tool positions.
-    for (int index = 0; index < toolCount; index++)
-    {
-        toolPosition[index].setZero();
-    }
-
+    toolPosition.setZero();
     return 0;
 }
-
-////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc,
          char* argv[])
@@ -418,22 +320,9 @@ int main(int argc,
     }
 
     // Create a high priority haptic thread.
-#if defined(WIN32) || defined(WIN64)
-
     DWORD threadHandle;
     CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)(hapticsLoop), nullptr, 0x0000, &threadHandle);
     SetThreadPriority(&threadHandle, THREAD_PRIORITY_ABOVE_NORMAL);
-
-#else
-
-    pthread_t threadHandle;
-    pthread_create(&threadHandle, nullptr, hapticsLoop, nullptr);
-    struct sched_param schedulerParameters;
-    memset(&schedulerParameters, 0, sizeof(struct sched_param));
-    schedulerParameters.sched_priority = 10;
-    pthread_setschedparam(threadHandle, SCHED_RR, &schedulerParameters);
-
-#endif
 
     // Register a callback that stops the haptic thread when the application exits.
     atexit(onExit);
