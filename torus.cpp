@@ -118,9 +118,8 @@ void* hapticsLoop(void* a_userData)
     Eigen::Vector3d toolLocalPosition;
     Eigen::Vector3d forceLocal;
     Eigen::Vector3d force;
-    Eigen::Vector3d forceTool[2];
-    forceTool[0].setZero();
-    forceTool[1].setZero();
+    Eigen::Vector3d forceTool;
+    forceTool.setZero();
     Eigen::Vector3d torusAngularVelocity;
     torusAngularVelocity.setZero();
 
@@ -195,35 +194,34 @@ void* hapticsLoop(void* a_userData)
 
         // TODO(now): retrieve reactionForce as the negative of forceTool
         // Convert the tool reaction force and position to world coordinates.
-        forceTool[0] = torusRotation * forceLocal;
+        forceTool = torusRotation * forceLocal;
         currentDevice.toolPosition = torusRotation * toolLocalPosition;
 
-        Utils::forceOnTool = forceTool[0];
+        Utils::forceOnTool = forceTool;
 
         // Update the torus angular velocity.
-        torusAngularVelocity += -1.0 / Mass * timeStep * (currentDevice.toolPosition - torusPosition).cross(forceTool[0]);
+        torusAngularVelocity += -1.0 / Mass * timeStep * (currentDevice.toolPosition - torusPosition).cross(forceTool);
 
         // Compute the force to render on the haptic device.
         Eigen::Vector3d force;
-        double gripperForceMagnitude = 0.0;
-        force = forceTool[0];
+        force = forceTool;
 
         // Only enable haptic rendering once the device is in free space.
         static bool safeToRenderHaptics = false;
         if (!safeToRenderHaptics)
         {
-            if (force.norm() == 0.0 && gripperForceMagnitude == 0.0)
+            if (force.norm() == 0.0)
             {
                 safeToRenderHaptics = true;
             }
             else
             {
                 force.setZero();
-                gripperForceMagnitude = 0.0;
             }
         }
 
         // Apply all forces at once.
+        double gripperForceMagnitude = 0.0;
         dhdSetForceAndGripperForce(force(0), force(1), force(2), gripperForceMagnitude);
 
         // Stop the torus rotation if any of the devices button is pressed.
