@@ -25,12 +25,12 @@
 
 class Utils {
     public:
-    inline static Eigen::Vector3d forceOnTool[2] = {Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()};
+    inline static Eigen::Vector3d forceOnTool = Eigen::Vector3d::Zero();
 
     static void drawForceOnTool() {
         Eigen::Vector3d fixedVector(0.03, 0.0, 0.0);
         Eigen::Vector3d start(0.0, 0.0, 0.0);
-        Eigen::Vector3d end = Utils::forceOnTool[0]/1000;
+        Eigen::Vector3d end = Utils::forceOnTool/1000;
         glDisable(GL_LIGHTING);
         glBegin(GL_LINES);
         glColor3f(1.0f, 0.0f, 0.0f); // Set color to red
@@ -76,208 +76,33 @@ struct HapticDevice
 constexpr double Stiffness = 1000.0;
 constexpr double Mass = 1000.0;
 constexpr double Kv = 1.0;
-
-/// Torus outer radius in [m]
 constexpr float TorusOuterRadius = 0.05f;
-
-/// Torus inner radius in [m]
 constexpr float TorusInnerRadius = 0.027f;
-
-/// Haptic tool sphere radius in [m]
 constexpr double ToolRadius = 0.005;
+constexpr int GlfwSwapInterval = 1;
 
-/// GLFW swap interval setting
-constexpr int SwapInterval = 1;
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// Global variables
-///
-////////////////////////////////////////////////////////////////////////////////
-
-/// Simulation running flag
+// Global variables
 bool simulationRunning = true;
-
-/// Simulation closing synchronization flag
 bool simulationFinished = false;
-
-/// Text overlay flag
-bool showRefreshRate = true;
-
-/// GLFW window handle
 GLFWwindow* window = nullptr;
-
-/// GLFW window width in [pixel]
 int windowWidth = 0;
-
-/// GLFW window height in [pixel]
 int windowHeight = 0;
-
-/// Vector of available haptic devices
 std::vector<HapticDevice> devicesList;
-
-/// Torus position
 Eigen::Vector3d torusPosition;
-
-/// Torus rotation
 Eigen::Matrix3d torusRotation;
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function renders a torus using OpenGL.
-///
-/// \param a_majorRadius
-/// The outer radius of the torus in [m]
-///
-/// \param a_minorRadius
-/// The inner radius of the torus in [m]
-///
-/// \param a_majorNumSegments
-/// The number of segments to use to generate polygons along the torus major
-/// direction
-///
-/// \param a_minorNumSegments
-/// The number of segments to use to generate polygons along the torus minor
-/// direction
-///
-////////////////////////////////////////////////////////////////////////////////
-
-void DrawTorus(float a_outerRadius,
-               float a_innerRadius,
-               int a_majorNumSegments,
-               int a_minorNumSegments)
+int initializeHaptics()
 {
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    double majorStep = 2.0 * M_PI / a_majorNumSegments;
-    for (int majorIndex = 0; majorIndex < a_majorNumSegments; ++majorIndex)
+    int deviceId = dhdOpenID(0);
+    if (deviceId >= 0)
     {
-        double a0 = majorIndex * majorStep;
-        double a1 = a0 + majorStep;
-        GLdouble x0 = cos(a0);
-        GLdouble y0 = sin(a0);
-        GLdouble x1 = cos(a1);
-        GLdouble y1 = sin(a1);
-
-        glBegin(GL_TRIANGLE_STRIP);
-
-        double minorStep = 2.0 * M_PI / a_minorNumSegments;
-        for (int minorIndex = 0; minorIndex <= a_minorNumSegments; ++minorIndex)
-        {
-            double b = minorIndex * minorStep;
-            GLdouble c = cos(b);
-            GLdouble r = a_innerRadius * c + a_outerRadius;
-            GLdouble z = a_innerRadius * sin(b);
-
-            glNormal3d(x0 * c, y0 * c, z / a_innerRadius);
-            glTexCoord2d(majorIndex / static_cast<GLdouble>(a_majorNumSegments), minorIndex / static_cast<GLdouble>(a_minorNumSegments));
-            glVertex3d(x0 * r, y0 * r, z);
-
-            glNormal3d(x1 * c, y1 * c, z / a_innerRadius);
-            glTexCoord2d((majorIndex + 1) / static_cast<GLdouble>(a_majorNumSegments), minorIndex / static_cast<GLdouble>(a_minorNumSegments));
-            glVertex3d(x1 * r, y1 * r, z);
-        }
-
-        glEnd();
+        devicesList.push_back(HapticDevice {});
+        HapticDevice& currentDevice = devicesList.back();
+        currentDevice.deviceId = deviceId;
+        std::cout << dhdGetSystemName() << " device detected" << std::endl;
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function renders the scene using OpenGL.
-///
-////////////////////////////////////////////////////////////////////////////////
-
-int updateGraphics()
-{
-    // Clean up.
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // Render the torus.
-    static const GLfloat mat_ambient0[] = { 0.1f, 0.1f, 0.3f };
-    static const GLfloat mat_diffuse0[] = { 0.1f, 0.3f, 0.5f };
-    static const GLfloat mat_specular0[] = { 0.5f, 0.5f, 0.5f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient0);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse0);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular0);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1.0);
-
-    // Render the torus at its current position and rotation.
-    cMatrixGL matrix;
-    matrix.set(torusPosition, torusRotation);
-    matrix.glMatrixPushMultiply();
-    DrawTorus(TorusOuterRadius, TorusInnerRadius, 64, 64);
-    matrix.glMatrixPop();
-
-    // Configure OpenGL for tool rendering.
-    static const GLfloat mat_ambient1[] = { 0.4f, 0.4f, 0.4f };
-    static const GLfloat mat_diffuse1[] = { 0.8f, 0.8f, 0.8f };
-    static const GLfloat mat_specular1[] = { 0.5f, 0.5f, 0.5f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient1);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse1);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular1);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1.0);
-
-    // Render all tools for all devices.
-    HapticDevice& currentDevice = devicesList[0];
-    matrix.set(currentDevice.toolPosition, currentDevice.rotation);
-    matrix.glMatrixPushMultiply();
-    GLUquadricObj* sphere = gluNewQuadric();
-    gluSphere(sphere, ToolRadius, 32, 32);
-
-    // Drawing force acting over the tool
-    Utils::drawForceOnTool();
-
-    matrix.glMatrixPop();
-
-    // Render text overlay.
-    if (showRefreshRate)
-    {
-        static double lastFrequencyUpdateTime = dhdGetTime();
-        static char frequencyString[16] = "0.000 kHz";
-
-        // Periodically update the haptic refresh rate.
-        double time = dhdGetTime();
-        if (time - lastFrequencyUpdateTime > 0.1)
-        {
-            double frequency = dhdGetComFreq();
-            lastFrequencyUpdateTime = time;
-            snprintf(frequencyString, 10, "%0.03f kHz", frequency);
-        }
-
-        // Render the string.
-        glDisable(GL_LIGHTING);
-        glColor3f(1.0, 1.0, 1.0);
-        glRasterPos3f(0.0f, -0.01f, -0.1f);
-        for (char* character = frequencyString; *character != '\0'; character++)
-        {
-            render_character(*character, HELVETICA12);
-        }
-        glEnable(GL_LIGHTING);
-    }
-
-    // Report any issue.
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        return -1;
-    }
-
-    // Report success.
     return 0;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function implements the haptics loop.
-///
-/// \param a_userData
-/// Pointer to user data passed to the haptic thread
-///
-/// \return
-/// A pointer to a return data structure
-///
-////////////////////////////////////////////////////////////////////////////////
 
 void* hapticsLoop(void* a_userData)
 {
@@ -371,7 +196,7 @@ void* hapticsLoop(void* a_userData)
         forceTool[0] = torusRotation * forceLocal;
         currentDevice.toolPosition = torusRotation * toolLocalPosition;
 
-        Utils::forceOnTool[0] = forceTool[0];
+        Utils::forceOnTool = forceTool[0];
 
         // Update the torus angular velocity.
         torusAngularVelocity += -1.0 / Mass * timeStep * (currentDevice.toolPosition - torusPosition).cross(forceTool[0]);
@@ -426,12 +251,6 @@ void* hapticsLoop(void* a_userData)
     return nullptr;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when the application exits.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 void onExit()
 {
     // Wait for the haptic loop to finish.
@@ -443,13 +262,10 @@ void onExit()
 
     // Close the connection to all the haptic devices.
     size_t devicesCount = devicesList.size();
-    for (size_t deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
+    if (dhdClose() < 0)
     {
-        if (dhdClose() < 0)
-        {
-            std::cout << "error: failed to close the connection to device ID " << devicesList[deviceIndex].deviceId << " (" << dhdErrorGetLastStr() << ")" << std::endl;
-            return;
-        }
+        std::cout << "error: failed to close the connection to device ID " << devicesList[0].deviceId << " (" << dhdErrorGetLastStr() << ")" << std::endl;
+        return;
     }
 
     // Report success.
@@ -457,13 +273,98 @@ void onExit()
     return;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when the GLFW window is resized.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
+void DrawTorus(float a_outerRadius,
+               float a_innerRadius,
+               int a_majorNumSegments,
+               int a_minorNumSegments)
+{
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    double majorStep = 2.0 * M_PI / a_majorNumSegments;
+    for (int majorIndex = 0; majorIndex < a_majorNumSegments; ++majorIndex)
+    {
+        double a0 = majorIndex * majorStep;
+        double a1 = a0 + majorStep;
+        GLdouble x0 = cos(a0);
+        GLdouble y0 = sin(a0);
+        GLdouble x1 = cos(a1);
+        GLdouble y1 = sin(a1);
+
+        glBegin(GL_TRIANGLE_STRIP);
+
+        double minorStep = 2.0 * M_PI / a_minorNumSegments;
+        for (int minorIndex = 0; minorIndex <= a_minorNumSegments; ++minorIndex)
+        {
+            double b = minorIndex * minorStep;
+            GLdouble c = cos(b);
+            GLdouble r = a_innerRadius * c + a_outerRadius;
+            GLdouble z = a_innerRadius * sin(b);
+
+            glNormal3d(x0 * c, y0 * c, z / a_innerRadius);
+            glTexCoord2d(majorIndex / static_cast<GLdouble>(a_majorNumSegments), minorIndex / static_cast<GLdouble>(a_minorNumSegments));
+            glVertex3d(x0 * r, y0 * r, z);
+
+            glNormal3d(x1 * c, y1 * c, z / a_innerRadius);
+            glTexCoord2d((majorIndex + 1) / static_cast<GLdouble>(a_majorNumSegments), minorIndex / static_cast<GLdouble>(a_minorNumSegments));
+            glVertex3d(x1 * r, y1 * r, z);
+        }
+
+        glEnd();
+    }
+}
+
+int updateGraphics()
+{
+    // Clean up.
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Render the torus.
+    static const GLfloat mat_ambient0[] = { 0.1f, 0.1f, 0.3f };
+    static const GLfloat mat_diffuse0[] = { 0.1f, 0.3f, 0.5f };
+    static const GLfloat mat_specular0[] = { 0.5f, 0.5f, 0.5f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular0);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1.0);
+
+    // Render the torus at its current position and rotation.
+    cMatrixGL matrix;
+    matrix.set(torusPosition, torusRotation);
+    matrix.glMatrixPushMultiply();
+    DrawTorus(TorusOuterRadius, TorusInnerRadius, 64, 64);
+    matrix.glMatrixPop();
+
+    // Configure OpenGL for tool rendering.
+    static const GLfloat mat_ambient1[] = { 0.4f, 0.4f, 0.4f };
+    static const GLfloat mat_diffuse1[] = { 0.8f, 0.8f, 0.8f };
+    static const GLfloat mat_specular1[] = { 0.5f, 0.5f, 0.5f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient1);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse1);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular1);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1.0);
+
+    // Render all tools for all devices.
+    HapticDevice& currentDevice = devicesList[0];
+    matrix.set(currentDevice.toolPosition, currentDevice.rotation);
+    matrix.glMatrixPushMultiply();
+    GLUquadricObj* sphere = gluNewQuadric();
+    gluSphere(sphere, ToolRadius, 32, 32);
+
+    // Drawing force acting over the tool
+    Utils::drawForceOnTool();
+
+    matrix.glMatrixPop();
+
+    // Report any issue.
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        return -1;
+    }
+
+    // Report success.
+    return 0;
+}
 
 void onWindowResized(GLFWwindow* a_window,
                      int a_width,
@@ -484,14 +385,6 @@ void onWindowResized(GLFWwindow* a_window,
     glLoadIdentity();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// This function is called when a key is pressed in the GLFW window.
-///
-/// \note See GLFW documentation for a description of the parameters.
-///
-////////////////////////////////////////////////////////////////////////////////
-
 void onKeyPressed(GLFWwindow* a_window,
                   int a_key,
                   int a_scanCode,
@@ -508,12 +401,6 @@ void onKeyPressed(GLFWwindow* a_window,
     if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
     {
         exit(0);
-    }
-
-    // Toggle the display of the refresh rate.
-    if (a_key == GLFW_KEY_R)
-    {
-        showRefreshRate = !showRefreshRate;
     }
 }
 
@@ -559,7 +446,7 @@ int initializeGLFW()
     glfwSetKeyCallback(window, onKeyPressed);
     glfwSetWindowSizeCallback(window, onWindowResized);
     glfwSetWindowPos(window, x, y);
-    glfwSwapInterval(SwapInterval);
+    glfwSwapInterval(GlfwSwapInterval);
     glfwShowWindow(window);
 
     // Adjust initial window size
@@ -604,19 +491,6 @@ int initializeGLFW()
     return 0;
 }
 
-int initializeHaptics()
-{
-    int deviceId = dhdOpenID(0);
-    if (deviceId >= 0)
-    {
-        devicesList.push_back(HapticDevice {});
-        HapticDevice& currentDevice = devicesList.back();
-        currentDevice.deviceId = deviceId;
-        std::cout << dhdGetSystemName() << " device detected" << std::endl;
-    }
-    return 0;
-}
-
 int initializeSimulation()
 {
     size_t devicesCount = devicesList.size();
@@ -657,7 +531,6 @@ int main(int argc,
     }
 
     // Create a high priority haptic thread.
-
     DWORD threadHandle;
     CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)(hapticsLoop), nullptr, 0x0000, &threadHandle);
     SetThreadPriority(&threadHandle, THREAD_PRIORITY_ABOVE_NORMAL);
