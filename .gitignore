@@ -2,3 +2,4 @@ sdk/
 vcpkg/
 build/
 build_renderer/
+build_processor/
