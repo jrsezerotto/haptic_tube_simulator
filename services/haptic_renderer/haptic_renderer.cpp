@@ -64,10 +64,8 @@ void checkForMessage(SOCKET sock) {
         if (parsed == 6) {
             toolPosition = Eigen::Vector3d(x, y, z);
             forceTool = Eigen::Vector3d(fx, fy, fz);
-            std::cout << "Tool: [" << toolPosition.transpose()
-                      << "]  Force: [" << forceTool.transpose() << "]" << std::endl;
         } else {
-            std::cerr << "Mensagem mal formatada: " << buffer << std::endl;
+            std::cerr << "Invalid message: " << buffer << std::endl;
         }
     }
 }

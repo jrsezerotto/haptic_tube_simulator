@@ -15,7 +15,7 @@ constexpr double SphereRadius = 0.03;
 constexpr double ToolRadius = 0.005;
 constexpr double LinearStiffness = 1000.0;
 constexpr double PixelToMeter = 0.0005;
-constexpr double KeyStep = 0.001;
+constexpr double KeyStep = 0.008;
 
 // Estado atual
 Eigen::Vector3d toolPosition(0.05, 0.0, 0.0);
@@ -24,19 +24,17 @@ Eigen::Vector3d forceTool;
 void updateToolPosition() {
     POINT cursor;
     GetCursorPos(&cursor);
+
     int screenCenterX = GetSystemMetrics(SM_CXSCREEN) / 2;
     int screenCenterY = GetSystemMetrics(SM_CYSCREEN) / 2;
 
-    double x = (cursor.x - screenCenterX) * PixelToMeter;
-    double y = -(cursor.y - screenCenterY) * PixelToMeter;
-    toolPosition.x() = x;
-    toolPosition.y() = y;
-
-    if (_kbhit()) {
-        int key = _getch();
-        if (key == 'w') toolPosition.z() += KeyStep;
-        if (key == 's') toolPosition.z() -= KeyStep;
-    }
+    // Correção: horizontal do mouse → Y (horizontal na tela)
+    toolPosition.y() = (cursor.x - screenCenterX) * PixelToMeter;
+    // vertical do mouse → Z (pra cima e pra baixo)
+    toolPosition.z() = -(cursor.y - screenCenterY) * PixelToMeter;
+    // W/S → profundidade (eixo X)
+    if (GetAsyncKeyState('W') & 0x8000) toolPosition.x() += KeyStep;
+    if (GetAsyncKeyState('S') & 0x8000) toolPosition.x() -= KeyStep;
 }
 
 void updateForce() {
@@ -45,13 +43,16 @@ void updateForce() {
     double penetration = distance - SphereRadius - ToolRadius;
 
     if (penetration < 0.0 && distance > 1e-6)
+    {
         forceTool = -penetration * LinearStiffness * delta.normalized();
+        forceTool /= 10.0;
+    }
     else
         forceTool.setZero();
 }
 
 int main() {
-    std::cout << "Use o mouse para mover em X/Y e teclas W/S para Z.\n";
+    std::cout << "Use mouse to move along X/Y and keys W/S for Z.\n";
 
     // Socket setup
     WSADATA wsaData;
@@ -68,9 +69,6 @@ int main() {
     while (true) {
         updateToolPosition();
         updateForce();
-
-        std::cout << "\rPos: [" << toolPosition.transpose()
-                  << "]  Força: [" << forceTool.transpose() << "]       " << std::flush;
 
         char message[128];
         snprintf(message, sizeof(message), "%.4f %.4f %.4f %.4f %.4f %.4f",
