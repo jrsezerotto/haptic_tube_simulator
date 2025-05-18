@@ -33,6 +33,7 @@ target_link_libraries(haptic_renderer PRIVATE
     OpenGL::GL
     glu32
     dhdms64
+    ws2_32
 )
 
 # Subsystem console (somente se MSVC estiver sendo usado)

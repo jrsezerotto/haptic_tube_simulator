@@ -60,7 +60,7 @@ int main() {
 
     sockaddr_in destAddr;
     destAddr.sin_family = AF_INET;
-    destAddr.sin_port = htons(12345);  // Porta do renderer
+    destAddr.sin_port = htons(9999);  // Porta do renderer
     destAddr.sin_addr.s_addr = inet_addr("127.0.0.1");  // Localhost
 
     SetCursorPos(GetSystemMetrics(SM_CXSCREEN)/2, GetSystemMetrics(SM_CYSCREEN)/2);
@@ -72,7 +72,11 @@ int main() {
         std::cout << "\rPos: [" << toolPosition.transpose()
                   << "]  Força: [" << forceTool.transpose() << "]       " << std::flush;
 
-        const char* message = "Hello there";
+        char message[128];
+        snprintf(message, sizeof(message), "%.4f %.4f %.4f %.4f %.4f %.4f",
+                 toolPosition.x(), toolPosition.y(), toolPosition.z(),
+                 forceTool.x(), forceTool.y(), forceTool.z());
+
         sendto(sock, message, strlen(message), 0, (sockaddr*)&destAddr, sizeof(destAddr));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

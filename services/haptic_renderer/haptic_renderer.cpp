@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <winsock2.h>  // Para comunicação UDP
+#pragma comment(lib, "ws2_32.lib")
 
 #define NOMINMAX
 #include "windows.h"
@@ -25,25 +27,56 @@ int windowHeight = 0;
 Eigen::Vector3d toolPosition;
 Eigen::Vector3d forceTool;
 
-// Struct e função para simular comunicação via socket
-struct HapticsInfo {
-    Eigen::Vector3d toolPosition;
-    Eigen::Vector3d forceVector;
-};
+void setupUDPListener(SOCKET& sock, sockaddr_in& serverAddr) {
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-HapticsInfo getHapticsInfo() {
-    Eigen::Vector3d direction = Eigen::Vector3d(1, 1, 0).normalized();
-    Eigen::Vector3d position = SpherePosition + (SphereRadius + ToolRadius - 0.001) * direction;
-    Eigen::Vector3d force = direction / 3;  // Escalado para visualização clara
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "Erro ao criar socket UDP." << std::endl;
+        exit(1);
+    }
 
-    return { position, force };
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(9999);
+
+    if (bind(sock, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "Erro ao bindar porta 9999." << std::endl;
+        exit(1);
+    }
+
+    u_long mode = 1;
+    ioctlsocket(sock, FIONBIO, &mode);
+}
+
+void checkForMessage(SOCKET sock) {
+    char buffer[1024] = {};
+    sockaddr_in from;
+    int fromlen = sizeof(from);
+    int bytesReceived = recvfrom(sock, buffer, sizeof(buffer) - 1, 0, (sockaddr*)&from, &fromlen);
+
+    if (bytesReceived > 0) {
+        buffer[bytesReceived] = '\0';
+
+        double x, y, z, fx, fy, fz;
+        int parsed = sscanf(buffer, "%lf %lf %lf %lf %lf %lf", &x, &y, &z, &fx, &fy, &fz);
+        if (parsed == 6) {
+            toolPosition = Eigen::Vector3d(x, y, z);
+            forceTool = Eigen::Vector3d(fx, fy, fz);
+            std::cout << "Tool: [" << toolPosition.transpose()
+                      << "]  Force: [" << forceTool.transpose() << "]" << std::endl;
+        } else {
+            std::cerr << "Mensagem mal formatada: " << buffer << std::endl;
+        }
+    }
 }
 
 void drawForceVector(const Eigen::Vector3d& force) {
     if (force.norm() < 1e-6) return;
 
     Eigen::Vector3d start = Eigen::Vector3d::Zero();
-    Eigen::Vector3d end = force * 0.1;  // Escala ajustável
+    Eigen::Vector3d end = force * 0.1;
     Eigen::Vector3d direction = (end - start).normalized();
 
     glDisable(GL_LIGHTING);
@@ -72,10 +105,6 @@ void drawForceVector(const Eigen::Vector3d& force) {
 
 int updateGraphics() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    HapticsInfo info = getHapticsInfo();
-    toolPosition = info.toolPosition;
-    forceTool = info.forceVector;
 
     cMatrixGL matrix;
     matrix.set(SpherePosition);
@@ -129,7 +158,7 @@ int initializeGLFW() {
     windowWidth = static_cast<int>(0.8 * mode->height);
     windowHeight = static_cast<int>(0.5 * mode->height);
     int x = static_cast<int>(0.5 * (mode->width - windowWidth));
-    int y = static_cast<int>(0.5 * (mode->height - windowHeight));
+    int y = static_cast<int>(0.5 * mode->height);
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
@@ -183,7 +212,13 @@ int main() {
     std::cout << "Visualização sem dispositivo háptico" << std::endl;
     if (initializeGLFW() < 0) return -1;
 
+    SOCKET udpSocket;
+    sockaddr_in serverAddr;
+    setupUDPListener(udpSocket, serverAddr);
+
     while (!glfwWindowShouldClose(window)) {
+        checkForMessage(udpSocket);
+
         if (updateGraphics() < 0) {
             std::cout << "error: failed to update graphics" << std::endl;
             break;
@@ -192,6 +227,8 @@ int main() {
         glfwPollEvents();
     }
 
+    closesocket(udpSocket);
+    WSACleanup();
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
