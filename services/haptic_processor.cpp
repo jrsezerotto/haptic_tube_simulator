@@ -1,0 +1,2 @@
+// HapticCore: apenas lógica háptica
+
