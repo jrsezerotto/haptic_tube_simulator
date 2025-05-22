@@ -1,17 +1,25 @@
 cmake_minimum_required(VERSION 3.14)
+set(prod OFF CACHE BOOL "Build in production mode")
 
 # Caminho do vcpkg (ajuste se necessário)
 set(CMAKE_TOOLCHAIN_FILE "vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
 project(torus_example LANGUAGES CXX)
+message(STATUS "prod = ${prod}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(torus_example
-    sphere.cpp
-    dhdc.cpp
-)
+# Se a flag -Dprod=ON for passada, dhdc.cpp é omitido
+if(prod)
+    message(STATUS "Building in production mode (dhdc.cpp excluído)")
+    set(SOURCES sphere.cpp)
+else()
+    message(STATUS "Building in development mode (dhdc.cpp incluído)")
+    set(SOURCES sphere.cpp dhdc.cpp)
+endif()
+
+add_executable(torus_example ${SOURCES})
 
 # Includes
 target_include_directories(torus_example PRIVATE
@@ -35,7 +43,6 @@ target_link_libraries(torus_example PRIVATE
     dhdms64
 )
 
-# Subsystem console (somente se MSVC estiver sendo usado)
 if(MSVC)
     set_target_properties(torus_example PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:CONSOLE"

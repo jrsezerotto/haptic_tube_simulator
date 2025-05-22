@@ -1,5 +1,6 @@
 sdk/
 vcpkg/
 build/
+build_prod/
 build_renderer/
 build_processor/
