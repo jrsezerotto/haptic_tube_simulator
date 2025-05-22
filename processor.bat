@@ -1,7 +1,19 @@
 @echo off
 setlocal
 set "PATH=%PATH%;C:\msys64\mingw64\bin"
+set "ROOT=%~dp0"
 
-cmake -S services/haptic_processor -B build_processor -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE="%~dp0vcpkg\scripts\buildsystems\vcpkg.cmake" || exit /b 1
-cmake --build build_processor || exit /b 1
-.\build_processor\haptic_processor.exe || exit /b 1
+set "BUILD_DIR=build_processor"
+set "PROD_FLAG="
+
+if "%1"=="prod" (
+    set "BUILD_DIR=build_processor_prod"
+    set "PROD_FLAG=-Dprod=ON"
+)
+
+rmdir /s /q %BUILD_DIR% 2>nul
+mkdir %BUILD_DIR%
+
+cmake -S services/haptic_processor -B %BUILD_DIR% -G "MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE="%ROOT%\vcpkg\scripts\buildsystems\vcpkg.cmake" %PROD_FLAG% || exit /b 1
+cmake --build %BUILD_DIR% || exit /b 1
+.\%BUILD_DIR%\haptic_processor.exe || exit /b 1

@@ -138,3 +138,7 @@ int __SDK dhdEmulateButton (uchar val, char ID) {
 bool __SDK dhdHasActiveGripper (char ID) {
    return false;
 };
+
+int __SDK dhdSetForce (double  fx, double  fy, double  fz, char ID) {
+   return DHD_NO_ERROR;
+};
