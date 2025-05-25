@@ -58,7 +58,7 @@ int __SDK dhdGetPosition(double *px, double *py, double *pz, char ID) {
     // --- Atualiza posição Z com base nas teclas W/S ---
     SHORT wState = GetAsyncKeyState('W');
     SHORT sState = GetAsyncKeyState('S');
-    double displacementIncrement = 0.0000003;
+    double displacementIncrement = 0.003;
 
     if (wState & 0x8000) keyboardZ += displacementIncrement;
     if (sState & 0x8000) keyboardZ -= displacementIncrement;

@@ -60,7 +60,7 @@ int main() {
 
         // Envia via UDP
         char message[128];
-        snprintf(message, sizeof(message), "%.4f %.4f %.4f %.4f %.4f %.4f",
+        snprintf(message, sizeof(message), "%.10f %.10f %.10f %.10f %.10f %.10f",
                  toolPosition.x(), toolPosition.y(), toolPosition.z(),
                  forceTool.x(), forceTool.y(), forceTool.z());
 
