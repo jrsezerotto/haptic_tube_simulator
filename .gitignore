@@ -1,4 +1,5 @@
 sdk/
+.vscode/
 vcpkg/
 build/
 build_prod/

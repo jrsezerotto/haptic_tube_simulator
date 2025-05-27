@@ -9,9 +9,9 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-constexpr double SphereRadius = 0.03;
+constexpr double SphereRadius = 0.04;
 constexpr double ToolRadius = 0.005;
-constexpr double LinearStiffness = 1000.0;
+constexpr double LinearStiffness = 3000.0;
 
 Eigen::Vector3d toolPosition(0.05, 0.0, 0.0);
 Eigen::Vector3d forceTool;
@@ -66,7 +66,11 @@ int main() {
 
         sendto(sock, message, strlen(message), 0, (sockaddr*)&destAddr, sizeof(destAddr));
 
+#ifdef PROD_BUILD
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#else
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+#endif
     }
 
     closesocket(sock);
