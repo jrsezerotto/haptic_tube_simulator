@@ -173,12 +173,15 @@ int main(int argc,
     // Display the device type.
     std::cout << dhdGetSystemName() << " device detected" << std::endl << std::endl;
 
-    // Display user instructions.
-    std::cout << "press BUTTON or 'p' to define the segment extremities" << std::endl;
-    std::cout << "                'c' to clear the current segment" << std::endl;
-    std::cout << "                'q' to quit" << std::endl << std::endl;
-    std::cout << "select first segment point  \r";
-    std::cout.flush();
+    // Automatically define the constraint segment points.
+    double numPoints = 2;
+    double A[3] = {0.060909, -0.00278975, 0.0402634};
+    double B[3] = {-0.0415639, -0.0158245, 0.0411088};
+
+    std::cout << "Segment constraint activated at startup." << std::endl;
+    std::cout << "Point A: [" << A[0] << ", " << A[1] << ", " << A[2] << "]" << std::endl;
+    std::cout << "Point B: [" << B[0] << ", " << B[1] << ", " << B[2] << "]" << std::endl;
+    std::cout << "Constraint is active.\n" << std::endl;
 
     // Enable force rendering on the haptic device.
     if (dhdEnableForce(DHD_ON) < 0)
@@ -196,10 +199,7 @@ int main(int argc,
         return -1;
     }
 
-    // Allocate and initialize haptic loop variables.
-    double numPoints = 0;
-    double A[3] = {};
-    double B[3] = {};
+    // Initialize haptic loop variables.
     double position[3] = {};
     double velocity[3] = {};
     double projectedPosition[3] = {};
@@ -249,8 +249,6 @@ int main(int argc,
             // this removes all unwanted force components (e.g. damping along the "free" direction).
             projectForceOnDirection(force, position, projectedPosition, projectedForce);
         }
-
-        // If no segment is defined, apply a null force.
         else
         {
             projectedForce[0] = 0.0;
@@ -266,60 +264,17 @@ int main(int argc,
             break;
         }
 
-        // Detect user button event.
-        bool userButton = (dhdGetButton(0) != 0);
-        bool addPoint = (!userButton && previousUserButton);
-        previousUserButton = userButton;
-
-        // Process user input.
+        // Allow the user to exit.
         if (dhdKbHit())
         {
             switch (dhdKbGet())
             {
-                // Add a segment point.
-                case 'p':
-                {
-                    addPoint = true;
-                    break;
-                }
-
-                // Clear the current segment definition.
-                case 'c':
-                {
-                    numPoints = 0;
-                    std::cout << "select first segment point  \r";
-                    std::cout.flush();
-                    break;
-                }
-
-                // Quit the application.
                 case 'q':
                 {
-                    std::cout << std::endl << std::endl << "exiting at user's request" << std::endl;
+                    std::cout << std::endl << std::endl << "Exiting at user's request" << std::endl;
                     running = false;
                     break;
                 }
-            }
-        }
-
-        // Define segment if required.
-        if (addPoint)
-        {
-            if (numPoints == 0)
-            {
-                dhdGetPosition(&(A[0]), &(A[1]), &(A[2]));
-                numPoints = 1;
-
-                std::cout << "select second segment point \r";
-                std::cout.flush();
-            }
-            else if (numPoints == 1)
-            {
-                dhdGetPosition(&(B[0]), &(B[1]), &(B[2]));
-                numPoints = 2;
-
-                std::cout << "segment constraint active   \r";
-                std::cout.flush();
             }
         }
     }
@@ -333,6 +288,6 @@ int main(int argc,
     }
 
     // Report success.
-    std::cout << "connection closed" << std::endl;
+    std::cout << "Connection closed" << std::endl;
     return 0;
 }
