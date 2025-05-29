@@ -191,14 +191,6 @@ int main(int argc,
         return -1;
     }
 
-    // Enable button emulation on devices with an active gripper.
-    if (dhdHasActiveGripper() && dhdEmulateButton(DHD_ON) < 0)
-    {
-        std::cout << "error: failed to enable button emulation (" << dhdErrorGetLastStr() << ")" << std::endl;
-        dhdSleep(2.0);
-        return -1;
-    }
-
     // Initialize haptic loop variables.
     double position[3] = {};
     double velocity[3] = {};
