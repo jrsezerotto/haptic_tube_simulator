@@ -1,8 +1,4 @@
 sdk/
 .vscode/
 vcpkg/
-build/
-build_prod/
-build_processor/
-build_processor_prod/
-build_renderer/
+build*/
