@@ -20,16 +20,16 @@ endif()
 add_executable(haptic_processor ${SOURCES})
 
 target_include_directories(haptic_processor PRIVATE
-    ${CMAKE_SOURCE_DIR}/../../sdk/include
-    ${CMAKE_SOURCE_DIR}/../../sdk/examples/GLFW/torus
-    ${CMAKE_SOURCE_DIR}/../../sdk/externals/Eigen
+    ${CMAKE_SOURCE_DIR}/../../../sdk/include
+    ${CMAKE_SOURCE_DIR}/../../../sdk/examples/GLFW/torus
+    ${CMAKE_SOURCE_DIR}/../../../sdk/externals/Eigen
 )
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 
 target_link_directories(haptic_processor PRIVATE
-    ${CMAKE_SOURCE_DIR}/../../sdk/lib
+    ${CMAKE_SOURCE_DIR}/../../../sdk/lib
 )
 
 target_link_libraries(haptic_processor PRIVATE
